@@ -29,10 +29,11 @@ type Run struct {
 }
 
 type Layer struct {
-	Number           int     `json:"number"`
-	Material         string  `json:"material"`
-	TargetNanometers float64 `json:"target_nm"`
-	RateNanometers   float64 `json:"rate_nm_s"`
+	Number           int            `json:"number"`
+	Material         string         `json:"material"`
+	TargetNanometers float64        `json:"target_nm"`
+	RateNanometers   float64        `json:"rate_nm_s"`
+	Guard            ThicknessGuard `json:"guard,omitempty"`
 }
 
 type Recipe struct {
@@ -53,12 +54,13 @@ type ChamberSnapshot struct {
 }
 
 type ThicknessSample struct {
-	RunID        ID        `json:"run_id"`
-	Frequency    float64   `json:"frequency"`
-	Transmission float64   `json:"transmission"`
-	Nanometers   float64   `json:"nanometers"`
-	Valid        bool      `json:"valid"`
-	At           time.Time `json:"at"`
+	RunID        ID          `json:"run_id"`
+	Frequency    float64     `json:"frequency"`
+	Transmission float64     `json:"transmission"`
+	Nanometers   float64     `json:"nanometers"`
+	Valid        bool        `json:"valid"`
+	Guard        GuardStatus `json:"guard,omitempty"`
+	At           time.Time   `json:"at"`
 }
 
 type Incident struct {

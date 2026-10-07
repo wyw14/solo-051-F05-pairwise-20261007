@@ -51,11 +51,18 @@ func (r *Runtime) Capture(sample model.ThicknessSample, layer int) (model.LayerE
 	if sample.At.IsZero() {
 		sample.At = time.Now().UTC()
 	}
+	guard := r.Window.Assess(layer, sample)
+	sample.Guard = guard
 	r.Monitor.Add(sample)
 	r.Window.Add(sample)
 	r.Traces.AppendThickness(sample)
 	_ = r.Broadcast.PublishThen(sample, nil)
 	evidence := model.BuildLayerEvidence(sample, layer)
+	if sample.Valid && guard.BlocksRelease() {
+		// 离群/恢复中：原始证据已保留，但不推进放行结论，运行可继续等待恢复。
+		r.Incidents.Raise(sample.RunID, "warning", fmt.Sprintf("thickness guard %s on layer %d", guard, layer))
+		return evidence, nil
+	}
 	if err := evidence.Validate(); err != nil {
 		r.Incidents.Raise(sample.RunID, "warning", err.Error())
 		return evidence, err
@@ -80,7 +87,7 @@ func (r *Runtime) Command(runID model.ID, revision int, kind model.CommandKind) 
 
 func (r *Runtime) Summary() map[string]any {
 	latest := r.Monitor.Latest()
-	return map[string]any{"started_at": r.StartedAt, "sequence": r.Sequence, "latest_thickness": latest, "trace_count": r.Traces.Count(), "timeline_entries": r.Timeline.Count(), "incidents": r.Incidents.List(), "vacuum": r.VacuumTelemetry.Readings(), "shutter_commands": r.Shutter.Commands()}
+	return map[string]any{"started_at": r.StartedAt, "sequence": r.Sequence, "latest_thickness": latest, "trace_count": r.Traces.Count(), "timeline_entries": r.Timeline.Count(), "incidents": r.Incidents.List(), "vacuum": r.VacuumTelemetry.Readings(), "shutter_commands": r.Shutter.Commands(), "thickness_guard": r.Window.LayerStatuses()}
 }
 
 func (s *Service) RunLayer(ctx context.Context, runtime *Runtime, runID model.ID, layer model.Layer) error {
@@ -100,6 +107,7 @@ func (s *Service) RunLayer(ctx context.Context, runtime *Runtime, runID model.ID
 		return err
 	}
 	profile := quartz.DefaultCalibration()
+	runtime.Window.ConfigureLayer(layer.Number, layer.TargetNanometers, layer.Guard)
 	sample := model.ThicknessSample{RunID: runID, Frequency: layer.TargetNanometers / profile.Slope, Transmission: 0.95, Nanometers: layer.TargetNanometers, Valid: true, At: time.Now().UTC()}
 	if _, err := runtime.Capture(sample, layer.Number); err != nil {
 		return err

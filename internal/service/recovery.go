@@ -73,6 +73,9 @@ func (s *Service) Release(runID model.ID, runtime *Runtime, operator string) (mo
 		evidence = append(evidence, model.BuildLayerEvidence(sample, index+1))
 	}
 	record := model.EvaluateRelease(*value, evidence, runtime.Incidents.ForRun(runID), operator)
+	guardReady := runtime.Window.ReleaseReady()
+	record = record.AddCheck("thickness_guard", guardReady, fmt.Sprintf("ready=%t layers=%d", guardReady, len(runtime.Window.LayerStatuses())))
+	record = record.Decide()
 	if err := record.Validate(); err != nil {
 		return record, err
 	}

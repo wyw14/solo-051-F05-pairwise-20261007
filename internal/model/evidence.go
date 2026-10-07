@@ -35,6 +35,11 @@ func BuildLayerEvidence(sample ThicknessSample, layerNumber int) LayerEvidence {
 	if !sample.Valid {
 		status = EvidenceInvalid
 	}
+	// 离群/缺失/恢复中的样本保留原始测量值，但证据不能判定为完整，
+	// 从而无法推进放行结论。
+	if status == EvidenceComplete && sample.Guard.BlocksRelease() {
+		status = EvidenceCollecting
+	}
 	return LayerEvidence{RunID: sample.RunID, LayerNumber: layerNumber, QuartzFrequency: sample.Frequency, OpticalTransmission: sample.Transmission, ThicknessNanometers: sample.Nanometers, QuartzValid: quartzValid, OpticalValid: opticalValid, CapturedAt: sample.At, Status: status}
 }
 
