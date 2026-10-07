@@ -10,11 +10,14 @@ import (
 )
 
 type layerRequest struct {
-	RunID            string  `json:"run_id"`
-	Number           int     `json:"number"`
-	Material         string  `json:"material"`
-	TargetNanometers float64 `json:"target_nm"`
-	RateNanometers   float64 `json:"rate_nm_s"`
+	RunID                string  `json:"run_id"`
+	Number               int     `json:"number"`
+	Material             string  `json:"material"`
+	TargetNanometers     float64 `json:"target_nm"`
+	RateNanometers       float64 `json:"rate_nm_s"`
+	OutlierThresholdNm   float64 `json:"outlier_threshold_nm,omitempty"`
+	ConsecutiveAnomalies int     `json:"consecutive_anomalies,omitempty"`
+	RecoveryWindow       int     `json:"recovery_window,omitempty"`
 }
 
 func runLayer(svc *service.Service, runtime *service.Runtime) http.HandlerFunc {
@@ -29,7 +32,7 @@ func runLayer(svc *service.Service, runtime *service.Runtime) http.HandlerFunc {
 			http.Error(w, "invalid run id", http.StatusBadRequest)
 			return
 		}
-		layer := model.Layer{Number: input.Number, Material: input.Material, TargetNanometers: input.TargetNanometers, RateNanometers: input.RateNanometers}
+		layer := model.Layer{Number: input.Number, Material: input.Material, TargetNanometers: input.TargetNanometers, RateNanometers: input.RateNanometers, OutlierThresholdNm: input.OutlierThresholdNm, ConsecutiveAnomalies: input.ConsecutiveAnomalies, RecoveryWindow: input.RecoveryWindow}
 		if err := svc.RunLayer(r.Context(), runtime, runID, layer); err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return

@@ -47,15 +47,31 @@ func (r *Runtime) NextSequence() int64 {
 	return value
 }
 
-func (r *Runtime) Capture(sample model.ThicknessSample, layer int) (model.LayerEvidence, error) {
+func (r *Runtime) Capture(sample model.ThicknessSample, layer model.Layer) (model.LayerEvidence, error) {
 	if sample.At.IsZero() {
 		sample.At = time.Now().UTC()
 	}
+	r.Window.ConfigureLayer(layer.Number, optical.GuardFromLayer(layer))
+	assessed := r.Window.Add(sample, layer.Number)
 	r.Monitor.Add(sample)
-	r.Window.Add(sample)
 	r.Traces.AppendThickness(sample)
 	_ = r.Broadcast.PublishThen(sample, nil)
-	evidence := model.BuildLayerEvidence(sample, layer)
+	evidence := model.BuildLayerEvidence(sample, layer.Number)
+	switch assessed.Status {
+	case optical.SampleMissing:
+		// 缺失样本维持原有行为：证据无效并上报
+		if err := evidence.Validate(); err != nil {
+			r.Incidents.Raise(sample.RunID, "warning", err.Error())
+			return evidence, err
+		}
+	case optical.SampleOutlier:
+		r.Incidents.Raise(sample.RunID, "warning", fmt.Sprintf("layer %d thickness outlier %.3f nm", layer.Number, sample.Nanometers))
+		r.Timeline.Add(sample.RunID, "thickness", fmt.Sprintf("%.3f nm outlier", sample.Nanometers))
+		return evidence, nil
+	case optical.SampleRecovering:
+		r.Timeline.Add(sample.RunID, "thickness", fmt.Sprintf("%.3f nm recovering", sample.Nanometers))
+		return evidence, nil
+	}
 	if err := evidence.Validate(); err != nil {
 		r.Incidents.Raise(sample.RunID, "warning", err.Error())
 		return evidence, err
@@ -101,7 +117,7 @@ func (s *Service) RunLayer(ctx context.Context, runtime *Runtime, runID model.ID
 	}
 	profile := quartz.DefaultCalibration()
 	sample := model.ThicknessSample{RunID: runID, Frequency: layer.TargetNanometers / profile.Slope, Transmission: 0.95, Nanometers: layer.TargetNanometers, Valid: true, At: time.Now().UTC()}
-	if _, err := runtime.Capture(sample, layer.Number); err != nil {
+	if _, err := runtime.Capture(sample, layer); err != nil {
 		return err
 	}
 	return nil

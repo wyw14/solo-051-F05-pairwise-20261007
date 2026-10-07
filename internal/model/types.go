@@ -33,6 +33,10 @@ type Layer struct {
 	Material         string  `json:"material"`
 	TargetNanometers float64 `json:"target_nm"`
 	RateNanometers   float64 `json:"rate_nm_s"`
+	// 离群监控配置，按配方层设置；OutlierThresholdNm 非正表示不启用
+	OutlierThresholdNm   float64 `json:"outlier_threshold_nm,omitempty"`
+	ConsecutiveAnomalies int     `json:"consecutive_anomalies,omitempty"`
+	RecoveryWindow       int     `json:"recovery_window,omitempty"`
 }
 
 type Recipe struct {

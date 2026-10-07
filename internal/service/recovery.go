@@ -6,6 +6,7 @@ import (
 	"github.com/wyw14/cry-161/internal/chamber"
 	"github.com/wyw14/cry-161/internal/journal"
 	"github.com/wyw14/cry-161/internal/model"
+	"github.com/wyw14/cry-161/internal/optical"
 	"github.com/wyw14/cry-161/internal/run"
 	"time"
 )
@@ -67,12 +68,21 @@ func (s *Service) Release(runID model.ID, runtime *Runtime, operator string) (mo
 	if !ok {
 		return model.ReleaseRecord{}, fmt.Errorf("run not found")
 	}
-	trace := runtime.Traces.Trace(runID)
-	evidence := make([]model.LayerEvidence, 0, len(trace.Thickness))
-	for index, sample := range trace.Thickness {
-		evidence = append(evidence, model.BuildLayerEvidence(sample, index+1))
+	// 只采纳窗口判定为有效的样本；离群、缺失、恢复中的样本保留原始记录但不推进放行
+	assessed := runtime.Window.AssessedForRun(runID)
+	evidence := make([]model.LayerEvidence, 0, len(assessed))
+	excluded := 0
+	for _, entry := range assessed {
+		if entry.Status != optical.SampleValid {
+			excluded++
+			continue
+		}
+		evidence = append(evidence, model.BuildLayerEvidence(entry.Sample, entry.Layer))
 	}
 	record := model.EvaluateRelease(*value, evidence, runtime.Incidents.ForRun(runID), operator)
+	if excluded > 0 {
+		record = record.AddCheck("outlier_evidence", true, fmt.Sprintf("excluded=%d", excluded))
+	}
 	if err := record.Validate(); err != nil {
 		return record, err
 	}
